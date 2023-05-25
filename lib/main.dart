@@ -1,7 +1,39 @@
+import 'package:clipboard/clipboard.dart';
+import 'package:firebase_admin/firebase_admin.dart';
+import 'package:firebase_admin/src/credential.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:fluttertoast/fluttertoast.dart';
+import 'package:share_plus/share_plus.dart';
 
-void main() {
-  runApp(const MyApp());
+import 'firebase_options.dart';
+
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // If you're going to use other Firebase services in the background, such as Firestore,
+  // make sure you call `initializeApp` before using other Firebase services.
+  await Firebase.initializeApp();
+  print("Handling a background message: ${message.messageId}");
+}
+
+void main() async {
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
+
+    await dotenv.load(fileName: ".env");
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    var credential = Credentials.applicationDefault();
+    print(await credential?.getAccessToken());
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    runApp(const MyApp());
+  } catch (e) {
+    print(e);
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -11,7 +43,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'NotificationPlayground',
+      title: 'Playground',
       theme: ThemeData(
         // This is the theme of your application.
         //
@@ -24,7 +56,7 @@ class MyApp extends StatelessWidget {
         // is not restarted.
         primarySwatch: Colors.blue,
       ),
-      home: const MyHomePage(title: 'Notifications playground'),
+      home: const MyHomePage(title: 'Playground'),
     );
   }
 }
@@ -48,68 +80,211 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+  String? _fcmToken;
+  final vapidKey = dotenv.env['VAPID_KEY'];
+  final isWebMobile = kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.android);
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+  void _fcmGetToken() async {
+    try {
+      String? token;
+      if (kIsWeb) {
+        token = await FirebaseMessaging.instance.getToken(
+          vapidKey: vapidKey,
+        );
+      } else {
+        token = await FirebaseMessaging.instance.getToken();
+      }
+      setState(() {
+        _fcmToken = token;
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        print(e);
+      }
+    }
+  }
+
+  void _requestPermission() async {
+    NotificationSettings settings =
+        await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      announcement: false,
+      badge: true,
+      carPlay: false,
+      criticalAlert: false,
+      provisional: false,
+      sound: true,
+    );
+
+    if (kDebugMode) {
+      print('User granted permission: ${settings.authorizationStatus}');
+    }
+
+    Fluttertoast.showToast(
+      msg: "Permission ${settings.authorizationStatus}",
+      toastLength: Toast.LENGTH_SHORT,
+      gravity: ToastGravity.CENTER,
+      timeInSecForIosWeb: 1,
+      backgroundColor: Colors.green,
+      textColor: Colors.white,
+      fontSize: 16.0,
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    FirebaseMessaging.instance.onTokenRefresh.listen((fcmToken) {
+      // Note: This callback is fired at each app startup and whenever a new
+      // token is generated.
+      setState(() {
+        _fcmToken = fcmToken;
+      });
+    }).onError((err) {
+      if (kDebugMode) {
+        print("Error getting token: $err");
+      }
+    });
+
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (kDebugMode) {
+        print('Got a message whilst in the foreground!');
+        print('Message data: $message');
+      }
+
+      if (message.notification != null) {
+        if (kDebugMode) {
+          print(
+              'Message also contained a notification: ${message.notification?.title}');
+        }
+      }
     });
   }
 
   @override
+  void didChangeDependencies() {
+    // TODO: implement didChangeDependencies
+    super.didChangeDependencies();
+    _fcmGetToken();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    print("Token generated: $_fcmToken");
+
+    final width = MediaQuery.of(context).size.width;
     return Scaffold(
-      appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
+      appBar: AppBar(title: Text(widget.title), actions: [
+        TextButton(
+          child: const Text(
+            "Request Permission",
+            style: TextStyle(
+              color: Colors.white,
             ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+          ),
+          onPressed: () {
+            _requestPermission();
+          },
+        )
+      ]),
+      body: Container(
+        padding: const EdgeInsets.only(
+          left: 8,
+          right: 8,
+          top: 8,
+          bottom: 0,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Card(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 8.0,
+                        vertical: 4.0,
+                      ),
+                      child: Text(
+                        "Fcm Token",
+                        style: TextStyle(fontSize: 18),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            color: Colors.grey.shade100,
+                            width: width * 0.8,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8.0,
+                                vertical: 8.0,
+                              ),
+                              child: Text(_fcmToken ?? ''),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 40,
+                            height: 40,
+                            child: IconButton(
+                              splashRadius: 20,
+                              onPressed: (() {
+                                if (isWebMobile || !kIsWeb) {
+                                  Share.share("$_fcmToken");
+                                } else {
+                                  FlutterClipboard.copy("$_fcmToken");
+                                  Fluttertoast.showToast(
+                                    msg: "Copied fcm token to clipboard",
+                                    toastLength: Toast.LENGTH_SHORT,
+                                    gravity: ToastGravity.CENTER,
+                                    timeInSecForIosWeb: 1,
+                                    backgroundColor: Colors.red,
+                                    textColor: Colors.white,
+                                    fontSize: 16.0,
+                                  );
+                                }
+                              }),
+                              icon: (() {
+                                if (isWebMobile || !kIsWeb) {
+                                  return const Icon(Icons.share);
+                                } else {
+                                  return const Icon(Icons.copy_outlined);
+                                }
+                              })(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (kIsWeb)
+                Wrap(
+                  children: [
+                    Image.asset(
+                      "assets/images/mac-browser-permission.png",
+                      width: 500,
+                      height: 500,
+                    ),
+                    const Text("If you are using a mac, or the can't "
+                        "receive push notifications on web, confirm "
+                        "notifications")
+                  ],
+                ),
+            ],
+          ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+      // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }

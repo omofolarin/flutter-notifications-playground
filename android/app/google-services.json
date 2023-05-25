@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "109322381201",
+    "project_id": "playground-3c810",
+    "storage_bucket": "playground-3c810.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:109322381201:android:f9e63e23ba795a1dd81c30",
+        "android_client_info": {
+          "package_name": "org.holuid.notifications_playground"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "109322381201-9ci97vvnopdlia63jie4e8q4oc8lk06q.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAnw2bM3o7z-otDS__lFUxbRiawXIW0st8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "109322381201-9ci97vvnopdlia63jie4e8q4oc8lk06q.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
